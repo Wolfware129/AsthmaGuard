@@ -10,10 +10,12 @@ import geocoder
 import webbrowser
 from supabase import create_client, Client # Added for permanent cloud storage
 
-# --- 1. SUPABASE CONFIGURATION (Market Ready) ---
-# Replace these with your actual Supabase details from Step 1
-SUPABASE_URL = "https://your-url.supabase.co"
-SUPABASE_KEY = "your-anon-key"
+# --- 1. SUPABASE CONFIGURATION ---
+# This line tells the app to look in the Streamlit Cloud "Vault"
+# If this name doesn't match the one in your dashboard exactly, it will fail
+URL = st.secrets["SUPABASE_URL"] 
+KEY = st.secrets["SUPABASE_KEY"]
+
 supabase: Client = create_client(URL, KEY)
 
 # --- 2. APP CONFIGURATION ---
@@ -219,4 +221,5 @@ else:
             if st.form_submit_button("Save ACT"):
                 save_act_score(st.session_state.user_email, s1*5)
                 st.rerun()
+
         if not act_df.empty: st.line_chart(act_df.set_index("Date")["ACT Score"])
