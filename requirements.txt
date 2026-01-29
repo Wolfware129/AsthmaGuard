@@ -1,0 +1,6 @@
+streamlit
+pandas
+numpy
+geocoder
+streamlit-js-eval
+supabase
