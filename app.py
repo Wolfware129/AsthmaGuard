@@ -89,7 +89,7 @@ if not st.session_state.logged_in:
         with t_login:
             with st.form("login"):
                 e, p = st.text_input("Email"), st.text_input("Password", type="password")
-                if st.form_submit_button("Login", use_container_width=True):
+                if st.form_submit_button("Login", type="primary", use_container_width=True):
                     res = supabase.table("settings").select("*").eq("sender_email", e).execute()
                     if res.data and res.data[0]['account_password'] == p:
                         st.session_state.logged_in, st.session_state.user_email, st.session_state.user_name = True, e, res.data[0]['full_name']
@@ -98,7 +98,7 @@ if not st.session_state.logged_in:
         with t_reg:
             with st.form("register"):
                 fn, em, pw = st.text_input("Full Name"), st.text_input("Email"), st.text_input("Password", type="password")
-                if st.form_submit_button("Create Account", use_container_width=True):
+                if st.form_submit_button("Create Account", type="primary", use_container_width=True):
                     ok, msg = register_user(fn, em, pw); st.success(msg) if ok else st.error(msg)
         st.markdown('</div>', unsafe_allow_html=True)
 else:
@@ -174,10 +174,11 @@ else:
                 q3 = st.select_slider("Waking up at night with symptoms?", options=[1, 2, 3, 4, 5])
                 q4 = st.select_slider("Frequency of rescue inhaler use?", options=[1, 2, 3, 4, 5])
                 q5 = st.select_slider("How would you rate your control?", options=[1, 2, 3, 4, 5])
-                if st.form_submit_button("Calculate ACT Score", use_container_width=True):
+                if st.form_submit_button("Calculate ACT Score", type="primary", use_container_width=True):
                     save_act_score(st.session_state.user_email, q1+q2+q3+q4+q5); st.rerun()
             st.download_button("📥 Download ACT History", report_content, file_name="ACT_Report.html", mime="text/html", use_container_width=True)
         with col_c:
             st.write("📊 **ACT Score History**")
             if not act_df.empty: st.line_chart(act_df.set_index("Date")["ACT Score"])
+
 
