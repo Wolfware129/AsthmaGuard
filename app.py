@@ -6,7 +6,7 @@ from streamlit_js_eval import get_geolocation
 import geocoder 
 from supabase import create_client, Client
 
-# --- 1. SUPABASE CONFIGURATION (STAYS PERMANENT) ---
+# --- 1. SUPABASE CONFIGURATION (Pulling from Streamlit Secrets) ---
 URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
@@ -19,7 +19,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- RESTORED CUSTOM CSS ---
+# --- CUSTOM CSS ---
 st.markdown("""
     <style>
     .login-container {
@@ -35,7 +35,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. DATABASE FUNCTIONS (SUPABASE) ---
+# --- 3. DATABASE FUNCTIONS ---
 def save_reading(email, reading):
     supabase.table("peak_flow_history").insert({"email": email, "date": datetime.now().isoformat(), "reading": reading}).execute()
 
@@ -89,22 +89,22 @@ if "logged_in" not in st.session_state: st.session_state.logged_in = False
 if "status_label" not in st.session_state: st.session_state.status_label = "Stable"
 if "status_delta" not in st.session_state: st.session_state.status_delta = "Normal"
 
-# --- 5. RESTORED DOCTOR/LOGIN UI ---
+# --- 5. LOGIN/REGISTER UI ---
 if not st.session_state.logged_in:
     with st.container():
         col_img, col_form = st.columns([1, 1], gap="large")
         with col_img:
-            # RESTORED: The Doctor Image on the left
-            st.image("https://img.freepik.com/free-vector/doctor-character-background_1270-84.jpg", width=None)
+            # FIXED: use_container_width=True prevents the crash in your screenshot
+            st.image("https://img.freepik.com/free-vector/doctor-character-background_1270-84.jpg", use_container_width=True)
         with col_form:
             st.markdown('<div class="login-container">', unsafe_allow_html=True)
-            st.title("🛡️ AsthmaGuard ")
+            st.title("🛡️ AsthmaGuard")
             t1, t2 = st.tabs(["🔐 Login", "📝 Register"])
             with t1:
                 with st.form("login"):
                     e = st.text_input("Gmail Address")
                     p = st.text_input("Password", type="password")
-                    if st.form_submit_button("Login", width=None, type="primary"):
+                    if st.form_submit_button("Login", use_container_width=True, type="primary"):
                         ok, de, fn = verify_user(e, p)
                         if ok:
                             st.session_state.logged_in, st.session_state.user_email = True, e
@@ -117,13 +117,13 @@ if not st.session_state.logged_in:
                     fn = st.text_input("Full Name")
                     em = st.text_input("Gmail Address")
                     pw = st.text_input("Password", type="password")
-                    if st.form_submit_button("Create Account", width=None, type="primary"):
+                    if st.form_submit_button("Create Account", use_container_width=True, type="primary"):
                         ok, msg = register_user(fn, em, pw)
                         if ok: st.success(msg)
                         else: st.error(msg)
             st.markdown('</div>', unsafe_allow_html=True)
 else:
-    # --- 6. DASHBOARD (STAYS THE SAME) ---
+    # --- 6. DASHBOARD ---
     raw_loc = get_geolocation()
     user_coords = raw_loc['coords'] if raw_loc else None
 
@@ -134,7 +134,7 @@ else:
         triggers = st.multiselect("Triggers", ["Dust", "Pollen", "Smoke"], ["Dust", "Smoke"])
         with st.expander("⚙️ Settings"):
             d_phone = st.text_input("Doctor's WhatsApp #", value=st.session_state.doctor_email)
-            if st.button("💾 Save"):
+            if st.button("💾 Save Settings"):
                 supabase.table("settings").update({"doctor_email": d_phone}).eq("sender_email", st.session_state.user_email).execute()
                 st.session_state.doctor_email = d_phone
                 st.success("Saved!")
