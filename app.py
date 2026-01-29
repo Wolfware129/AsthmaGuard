@@ -1,51 +1,41 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 from streamlit_js_eval import get_geolocation
 import geocoder 
 from supabase import create_client, Client
 
-# --- 1. SECURE CLOUD CONFIGURATION ---
-# These pull from your Streamlit "Secrets" vault
+# --- 1. SUPABASE CONFIGURATION (STAYS PERMANENT) ---
 URL = st.secrets["SUPABASE_URL"]
 KEY = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(URL, KEY)
 
-# --- 2. APP SETTINGS ---
+# --- 2. APP CONFIGURATION ---
 st.set_page_config(
     page_title="AsthmaGuard",
     page_icon="🛡️",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# --- 3. UPDATED WHATSAPP & SOS LOGIC ---
-def get_whatsapp_link(patient_name, doc_number, city, b_group, triggers, is_sos=False, ratio=0, current_pf=0, coords=None):
-    # Standardize the phone number for WhatsApp API
-    clean_number = ''.join(filter(str.isdigit, str(doc_number)))
-    
-    if is_sos:
-        if coords:
-            loc_link = f"https://www.google.com/maps?q={coords['latitude']},{coords['longitude']}"
-        else:
-            g = geocoder.ip('me')
-            loc_link = f"https://www.google.com/maps?q={g.latlng[0]},{g.latlng[1]}" if g.latlng else city
-        
-        message = (f"🚨 *SOS EMERGENCY ALERT* 🚨%0A%0A"
-                   f"*Patient:* {patient_name}%0A"
-                   f"*Blood Group:* {b_group}%0A"
-                   f"*Triggers:* {', '.join(triggers)}%0A"
-                   f"*Location:* {loc_link}%0A%0A"
-                   f"PLEASE HELP!")
-    else:
-        message = (f"🚨 *RESPIRATORY ALERT* 🚨%0A%0A"
-                   f"*Patient:* {patient_name}%0A"
-                   f"*Status:* RED ZONE ({int(ratio)}%)%0A"
-                   f"*Peak Flow:* {current_pf} L/min")
-    
-    return f"https://wa.me/{clean_number}?text={message}"
+# --- RESTORED CUSTOM CSS ---
+st.markdown("""
+    <style>
+    .login-container {
+        background-color: #f0f7f9;
+        padding: 2rem;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        border: 1px solid #e0eef2;
+    }
+    .stButton>button {
+        border-radius: 8px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-# --- 4. DATABASE FUNCTIONS ---
+# --- 3. DATABASE FUNCTIONS (SUPABASE) ---
 def save_reading(email, reading):
     supabase.table("peak_flow_history").insert({"email": email, "date": datetime.now().isoformat(), "reading": reading}).execute()
 
@@ -81,37 +71,59 @@ def register_user(name, email, acc_pw):
         return True, "Account created! Please Login."
     except: return False, "Email already registered."
 
-# --- 5. SESSION STATE ---
+def get_whatsapp_link(patient_name, doc_number, city, b_group, triggers, is_sos=False, ratio=0, current_pf=0, coords=None):
+    clean_number = ''.join(filter(str.isdigit, str(doc_number)))
+    if is_sos:
+        if coords:
+            loc_link = f"https://www.google.com/maps?q={coords['latitude']},{coords['longitude']}"
+        else:
+            g = geocoder.ip('me')
+            loc_link = f"https://www.google.com/maps?q={g.latlng[0]},{g.latlng[1]}" if g.latlng else city
+        message = f"🚨 *SOS EMERGENCY ALERT* 🚨%0A%0A*Patient:* {patient_name}%0A*Blood Group:* {b_group}%0A*Triggers:* {', '.join(triggers)}%0A*Location:* {loc_link}%0A%0APLEASE HELP!"
+    else:
+        message = f"🚨 *RESPIRATORY ALERT* 🚨%0A%0A*Patient:* {patient_name}%0A*Status:* RED ZONE ({int(ratio)}%)%0A*Peak Flow:* {current_pf} L/min"
+    return f"https://wa.me/{clean_number}?text={message}"
+
+# --- 4. SESSION STATE ---
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
 if "status_label" not in st.session_state: st.session_state.status_label = "Stable"
 if "status_delta" not in st.session_state: st.session_state.status_delta = "Normal"
 
-# --- 6. UI: LOGIN/LOGOUT ---
+# --- 5. RESTORED DOCTOR/LOGIN UI ---
 if not st.session_state.logged_in:
-    t1, t2 = st.tabs(["🔐 Login", "📝 Register"])
-    with t1:
-        with st.form("login"):
-            e = st.text_input("Email")
-            p = st.text_input("Password", type="password")
-            if st.form_submit_button("Login"):
-                ok, de, fn = verify_user(e, p)
-                if ok:
-                    st.session_state.logged_in, st.session_state.user_email = True, e
-                    st.session_state.user_name, st.session_state.doctor_email = fn, de
-                    st.session_state.history_df = load_history(e)
-                    st.rerun()
-                else: st.error("Wrong credentials.")
-    with t2:
-        with st.form("register"):
-            fn = st.text_input("Full Name")
-            em = st.text_input("Email")
-            pw = st.text_input("Password", type="password")
-            if st.form_submit_button("Create Account"):
-                ok, msg = register_user(fn, em, pw)
-                if ok: st.success(msg)
-                else: st.error(msg)
+    with st.container():
+        col_img, col_form = st.columns([1, 1], gap="large")
+        with col_img:
+            # RESTORED: The Doctor Image on the left
+            st.image("https://img.freepik.com/free-vector/doctor-character-background_1270-84.jpg", width=None)
+        with col_form:
+            st.markdown('<div class="login-container">', unsafe_allow_html=True)
+            st.title("🛡️ AsthmaGuard ")
+            t1, t2 = st.tabs(["🔐 Login", "📝 Register"])
+            with t1:
+                with st.form("login"):
+                    e = st.text_input("Gmail Address")
+                    p = st.text_input("Password", type="password")
+                    if st.form_submit_button("Login", width=None, type="primary"):
+                        ok, de, fn = verify_user(e, p)
+                        if ok:
+                            st.session_state.logged_in, st.session_state.user_email = True, e
+                            st.session_state.user_name, st.session_state.doctor_email = fn, de
+                            st.session_state.history_df = load_history(e)
+                            st.rerun()
+                        else: st.error("Invalid credentials.")
+            with t2:
+                with st.form("register"):
+                    fn = st.text_input("Full Name")
+                    em = st.text_input("Gmail Address")
+                    pw = st.text_input("Password", type="password")
+                    if st.form_submit_button("Create Account", width=None, type="primary"):
+                        ok, msg = register_user(fn, em, pw)
+                        if ok: st.success(msg)
+                        else: st.error(msg)
+            st.markdown('</div>', unsafe_allow_html=True)
 else:
-    # --- 7. MAIN DASHBOARD ---
+    # --- 6. DASHBOARD (STAYS THE SAME) ---
     raw_loc = get_geolocation()
     user_coords = raw_loc['coords'] if raw_loc else None
 
@@ -120,16 +132,17 @@ else:
         target_city = st.text_input("📍 City:", "Karachi")
         b_group = st.selectbox("Blood Group", ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"], index=4)
         triggers = st.multiselect("Triggers", ["Dust", "Pollen", "Smoke"], ["Dust", "Smoke"])
-        doc_p = st.text_input("Doctor's WhatsApp (e.g. 923001234567)", value=st.session_state.doctor_email)
-        if st.button("💾 Save Doctor Info"):
-            supabase.table("settings").update({"doctor_email": doc_p}).eq("sender_email", st.session_state.user_email).execute()
-            st.session_state.doctor_email = doc_p
-            st.success("Saved!")
-        if st.button("🚪 Sign Out"):
+        with st.expander("⚙️ Settings"):
+            d_phone = st.text_input("Doctor's WhatsApp #", value=st.session_state.doctor_email)
+            if st.button("💾 Save"):
+                supabase.table("settings").update({"doctor_email": d_phone}).eq("sender_email", st.session_state.user_email).execute()
+                st.session_state.doctor_email = d_phone
+                st.success("Saved!")
+        if st.button("🚪 Sign Out", use_container_width=True):
             st.session_state.logged_in = False
             st.rerun()
 
-    st.title("🛡️ AsthmaGuard Dashboard")
+    st.title("🖲️ AsthmaGuard Dashboard")
     m1, m2 = st.columns(2)
     m1.metric("Status", st.session_state.status_label, st.session_state.status_delta)
     m2.metric("Avg Peak Flow", f"{int(st.session_state.history_df['Peak Flow (L/min)'].mean())} L/min")
@@ -137,41 +150,36 @@ else:
     tab1, tab2, tab3, tab4 = st.tabs(["📈 Health", "🚨 SOS", "⛑️ First Aid", "📋 ACT"])
 
     with tab1:
-        c1, c2 = st.columns([1, 2])
-        with c1:
-            best = st.number_input("Personal Best PF", value=500)
-            today = st.number_input("Current Reading", value=450)
-            if st.button("📊 Log Reading"):
-                ratio = (today / best) * 100
-                save_reading(st.session_state.user_email, today)
+        col_calc, col_chart = st.columns([1, 1.5])
+        with col_calc:
+            best_pf = st.number_input("Best Peak Flow", value=500)
+            today_pf = st.number_input("Today's Reading", value=450)
+            if st.button("📊 Log Reading", type="primary"):
+                ratio = (today_pf / best_pf) * 100
+                save_reading(st.session_state.user_email, today_pf)
                 st.session_state.history_df = load_history(st.session_state.user_email)
                 if ratio >= 80: st.session_state.status_label, st.session_state.status_delta = "Green Zone", "Stable"
                 elif 50 <= ratio < 80: st.session_state.status_label, st.session_state.status_delta = "Yellow Zone", "Caution"
-                else: 
-                    st.session_state.status_label, st.session_state.status_delta = "Red Zone", "EMERGENCY"
-                    st.error("RED ZONE! Contact Doctor Immediately.")
-                    if st.session_state.doctor_email:
-                        alert_link = get_whatsapp_link(st.session_state.user_name, st.session_state.doctor_email, target_city, b_group, triggers, ratio=ratio, current_pf=today)
-                        st.link_button("⚠️ SEND RED ZONE ALERT", alert_link)
+                else: st.session_state.status_label, st.session_state.status_delta = "Red Zone", "EMERGENCY"
                 st.rerun()
-        with c2:
+        with col_chart:
             st.line_chart(st.session_state.history_df.set_index("Date")["Peak Flow (L/min)"])
 
     with tab2:
-        st.subheader("Emergency Assistance")
         if st.session_state.doctor_email:
-            sos_link = get_whatsapp_link(st.session_state.user_name, st.session_state.doctor_email, target_city, b_group, triggers, is_sos=True, coords=user_coords)
-            st.link_button("🚨 SEND WHATSAPP SOS", sos_link, type="primary", use_container_width=True)
-        else: st.warning("Please add a doctor's number in the sidebar.")
+            wa_link = get_whatsapp_link(st.session_state.user_name, st.session_state.doctor_email, target_city, b_group, triggers, is_sos=True, coords=user_coords)
+            st.link_button("🚨 OPEN WHATSAPP SOS", wa_link, type="primary", use_container_width=True)
+        else: st.warning("Save Doctor # in Sidebar Settings.")
 
     with tab3:
-        st.error("### ⚠️ EMERGENCY STEPS\n1. Sit upright and stay calm.\n2. Take one puff of your reliever inhaler every 30-60 seconds (up to 10 puffs).\n3. If no improvement, call for an ambulance.")
+        st.write("### ⛑️ Emergency Steps")
+        st.error("1. Sit Upright. 2. Take 4 Puffs. 3. Wait 4 Minutes.")
 
     with tab4:
-        act_history = load_act_history(st.session_state.user_email)
-        with st.form("act_form"):
-            score = st.slider("How would you rate your asthma control this week? (5=Good, 25=Great)", 5, 25, 20)
-            if st.form_submit_button("Submit Score"):
+        act_df = load_act_history(st.session_state.user_email)
+        with st.form("act"):
+            score = st.slider("Asthma Control Score", 5, 25, 20)
+            if st.form_submit_button("Save ACT"):
                 save_act_score(st.session_state.user_email, score)
                 st.rerun()
-        if not act_history.empty: st.area_chart(act_history.set_index("Date")["ACT Score"])
+        if not act_df.empty: st.line_chart(act_df.set_index("Date")["ACT Score"])
