@@ -136,7 +136,7 @@ else:
             with st.container(border=True):
                 best = st.number_input("Your Best Peak Flow (L/min)", 100, 800, 500)
                 now = st.number_input("Today's Peak Flow (L/min)", 50, 800, 450)
-                if st.button("📊 Calculate & Log Reading", use_container_width=True):
+                if st.button("📊 Calculate & Log Reading", type="primary", use_container_width=True):
                     ratio = (now / best) * 100
                     save_reading(st.session_state.user_email, now)
                     st.session_state.status_label = "Green Zone" if ratio >= 80 else "Yellow Zone" if ratio >= 50 else "Red Zone"
@@ -180,3 +180,4 @@ else:
         with col_c:
             st.write("📊 **ACT Score History**")
             if not act_df.empty: st.line_chart(act_df.set_index("Date")["ACT Score"])
+
