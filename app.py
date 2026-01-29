@@ -48,16 +48,14 @@ def load_act_history(email):
 def update_doctor_settings(email, doc_contact):
     supabase.table("settings").update({"doctor_email": doc_contact}).eq("sender_email", email).execute()
 
-# --- 4. SOS MESSAGE & WHATSAPP LOGIC (RESTORED) ---
+# --- 4. RESTORED SOS MESSAGE & LOCATION LOGIC ---
 def get_whatsapp_link(patient_name, doc_number, city, b_group, triggers, is_sos=False, ratio=0, current_pf=0, coords=None):
     if is_sos:
         if coords:
-            loc_link = f"http://maps.google.com/?q={coords['latitude']},{coords['longitude']}"
-            loc_source = "GPS"
+            loc_link = f"https://www.google.com/maps?q={coords['latitude']},{coords['longitude']}"
         else:
             g = geocoder.ip('me')
-            loc_link = f"http://maps.google.com/?q={g.latlng[0]},{g.latlng[1]}" if g.latlng else city
-            loc_source = "IP/Manual"
+            loc_link = f"https://www.google.com/maps?q={g.latlng[0]},{g.latlng[1]}" if g.latlng else city
         message = f"🚨 *SOS EMERGENCY ALERT* 🚨%0A%0A*Patient:* {patient_name}%0A*Blood Group:* {b_group}%0A*Triggers:* {', '.join(triggers)}%0A*Location:* {loc_link}%0A%0APLEASE SEND HELP!"
     else:
         message = f"🚨 *RESPIRATORY ALERT* 🚨%0A%0A*Patient:* {patient_name}%0A*Peak Flow:* {current_pf} L/min"
@@ -68,8 +66,8 @@ def get_whatsapp_link(patient_name, doc_number, city, b_group, triggers, is_sos=
 # --- PDF GENERATION ---
 def generate_report_html(name, city, b_group, triggers, history_df, act_df):
     history_html = history_df.tail(15).to_html(index=False)
-    act_html = act_df.tail(10).to_html(index=False) if not act_df.empty else "<p>No ACT data.</p>"
-    return f"<html><body><h1>AsthmaGuard Report</h1><p><b>Patient:</b> {name}</p><hr>{history_html}<hr>{act_html}</body></html>"
+    act_html = act_df.tail(10).to_html(index=False) if not act_df.empty else "<p>No ACT data available.</p>"
+    return f"<html><body style='font-family: Arial; padding: 20px;'><h1>AsthmaGuard Medical Report</h1><p><b>Patient:</b> {name} | <b>City:</b> {city} | <b>Blood Group:</b> {b_group}</p><p><b>Triggers:</b> {', '.join(triggers)}</p><hr><h3>Peak Flow History</h3>{history_html}<hr><h3>ACT History</h3>{act_html}</body></html>"
 
 # --- AUTH LOGIC ---
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
@@ -80,6 +78,7 @@ if not st.session_state.logged_in:
     col_img, col_form = st.columns([1, 1])
     with col_img: st.image("https://img.freepik.com/free-vector/doctor-character-background_1270-84.jpg", width=500)
     with col_form:
+        st.markdown('<div class="login-container">', unsafe_allow_html=True)
         st.title("🛡️ AsthmaGuard")
         with st.form("login"):
             e, p = st.text_input("Email"), st.text_input("Password", type="password")
@@ -89,6 +88,7 @@ if not st.session_state.logged_in:
                     st.session_state.logged_in, st.session_state.user_email, st.session_state.user_name = True, e, res.data[0]['full_name']
                     st.session_state.doctor_email = res.data[0].get('doctor_email', "")
                     st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 else:
     history_df = load_history(st.session_state.user_email)
     act_df = load_act_history(st.session_state.user_email)
@@ -100,7 +100,6 @@ else:
         target_city = st.text_input("📍 Current City:", "Karachi")
         b_group = st.selectbox("Blood Group", ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"], index=4)
         triggers = st.multiselect("Known Triggers", ["Dust", "Pollen", "Smoke"], ["Dust", "Smoke"])
-        # RESTORED SYSTEM SETTINGS
         with st.expander("⚙️ System Settings"):
             d_phone = st.text_input("Doctor's WhatsApp #", value=st.session_state.doctor_email)
             if st.button("💾 Save Settings", use_container_width=True):
@@ -122,27 +121,32 @@ else:
         st.subheader("📋 Expiratory Flow Rate (EFR)")
         c1, c2 = st.columns([1, 1.5])
         with c1:
-            best = st.number_input("Your Best Peak Flow (L/min)", 100, 800, 500)
-            now = st.number_input("Today's Peak Flow (L/min)", 50, 800, 450)
-            if st.button("📊 Calculate & Log Reading", use_container_width=True):
-                save_reading(st.session_state.user_email, now)
-                st.rerun()
-            st.download_button("📥 Download Full Medical PDF Report", report_content, file_name="Report.html", mime="text/html", use_container_width=True)
+            with st.container(border=True):
+                best = st.number_input("Your Best Peak Flow (L/min)", 100, 800, 500)
+                now = st.number_input("Today's Peak Flow (L/min)", 50, 800, 450)
+                if st.button("📊 Calculate & Log Reading", use_container_width=True):
+                    ratio = (now / best) * 100
+                    save_reading(st.session_state.user_email, now)
+                    st.session_state.status_label = "Green Zone" if ratio >= 80 else "Yellow Zone" if ratio >= 50 else "Red Zone"
+                    st.rerun()
+            st.download_button("📥 Download Full Medical PDF Report", report_content, file_name="Medical_Report.html", mime="text/html", use_container_width=True)
         with c2: st.line_chart(history_df.tail(7).set_index("Date")["Peak Flow (L/min)"])
 
     with tab2:
         st.error("🔴 **EMERGENCY PROTOCOL ACTIVATED**")
-        # RESTORED ADVANCED SOS LINK
         if st.session_state.doctor_email:
             wa_link = get_whatsapp_link(st.session_state.user_name, st.session_state.doctor_email, target_city, b_group, triggers, True, coords=user_coords)
             st.link_button("🚨 OPEN WHATSAPP SOS", wa_link, type="primary", use_container_width=True)
+            st.caption("Clicking this will open WhatsApp with your location and emergency message pre-typed.")
         else: st.warning("Save Doctor's number in Sidebar Settings!")
         st.map(pd.DataFrame({'lat': [user_coords['latitude'] if user_coords else 24.86], 'lon': [user_coords['longitude'] if user_coords else 67.00]}))
 
     with tab3:
         st.subheader("⛑️ Scenario-Based First Aid")
-        with st.expander("🟡 I feel an attack starting"): st.write("Stop activity, take 2 puffs, wait 15m.")
-        with st.expander("🔴 Acute Asthma Attack"): st.error("4x4 Rule: Sit up, 4 puffs, wait 4 mins, call help.")
+        with st.expander("🟡 I feel an attack starting (Yellow Zone)"):
+            st.write("* **Stop activity**\n* **Remove triggers**\n* **Inhaler:** Take 2 puffs\n* **Wait:** 15 minutes")
+        with st.expander("🔴 Acute Asthma Attack (Red Zone)"):
+            st.error("Follow the 4 x 4 Rule: 1. Sit Upright. 2. Take 4 Puffs. 3. Wait 4 Minutes. 4. Call Help.")
 
     with tab4:
         st.subheader("📋 Asthma Control Test™ (ACT)")
@@ -150,4 +154,4 @@ else:
             score = sum([st.slider(f"Q{i+1}", 1, 5, 3) for i in range(5)])
             if st.form_submit_button("Calculate ACT Score"):
                 save_act_score(st.session_state.user_email, score); st.rerun()
-        st.download_button("📥 Download ACT History", report_content, file_name="ACT.html", mime="text/html", use_container_width=True)
+        st.download_button("📥 Download ACT History", report_content, file_name="ACT_Report.html", mime="text/html", use_container_width=True)
